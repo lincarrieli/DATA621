@@ -1,0 +1,134 @@
+---
+title: "Final Project"
+author: "Lin Li"
+date: "12/19/2020"
+output: html_document
+---
+
+```{r}
+# load required packages
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(corrplot)
+library(MASS)
+library(caret)
+library(RCurl)
+library(pROC)
+library(RCurl)
+library(pscl)
+library(ROCR)
+library(ResourceSelection)
+# load dataset
+df <- read.csv("https://raw.githubusercontent.com/lincarrieli/DATA621/master/framingham.csv")
+df
+```
+
+```{r}
+# exploring dataset
+dim(df)
+str(df)
+summary(df)
+```
+
+```{r}
+# exploring variables
+# age
+hist(df$age)
+summary(df$age)
+
+# sex
+ggplot(df, aes(male)) +geom_bar()
+df %>% group_by(male) %>% summarize(count=n())
+```
+
+```{r}
+# checking and deleting missing values
+df <- df[complete.cases(df), ]
+dim(df)
+```
+
+
+```{r}
+# observing distribution of variables
+ggplot(gather(df), aes(value)) + 
+    geom_histogram(bins = 10) + 
+    facet_wrap(~key, scales = 'free_x')
+```
+
+
+```{r}
+# observing response variable
+pairs(df)
+```
+
+
+```{r}
+# plot response variable "TenYearCHD" against age
+par(mfrow=c(2,2))
+plot(df$age, df$TenYearCHD)
+boxplot(age ~ TenYearCHD, df)
+
+# plot response variable again "cigsperday"
+plot(df$totChol, df$TenYearCHD)
+boxplot(totChol ~ TenYearCHD, df)
+```
+
+```{r}
+# split data into train and test
+n <- nrow(df)
+trainIndex <- sample(1:n, size = round(0.75*n), replace=FALSE)
+train <- df[trainIndex ,]
+test <- df[-trainIndex ,]
+```
+
+```{r}
+model1 <- glm(TenYearCHD ~.,family=binomial,data=train)
+summary(model1)
+```
+
+```{r}
+# perform stepwise search
+model2 <- stepAIC(model1)
+summary(model2)
+```
+
+```{r}
+# manually selecting variables
+model3 <- glm(TenYearCHD ~ male + age + cigsPerDay + prevalentHyp + totChol + sysBP, family = binomial, data = df)
+summary(model3)
+```
+
+
+```{r}
+# perform model fit with McFadden R^2 index
+pR2(model1)
+pR2(model2)
+pR2(model3)
+```
+
+
+```{r}
+# assessing predictive ability of model
+fitted.results <- predict(model2, test, type = 'response')
+fitted.results <- ifelse(fitted.results > 0.5,1,0)
+
+misClasificError <- mean(fitted.results != test$TenYearCHD)
+print(paste('Accuracy',1-misClasificError))
+```
+
+```{r}
+p <- predict(model2, test, type="response")
+pr <- prediction(p, test$TenYearCHD)
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+ 
+p2 <- predict(model1, test, type="response")
+pr2 <- prediction(p2, test$TenYearCHD)
+prf2 <- performance(pr2, measure = "tpr", x.measure = "fpr")
+
+plot(prf)
+auc <- performance(pr, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+```
+
